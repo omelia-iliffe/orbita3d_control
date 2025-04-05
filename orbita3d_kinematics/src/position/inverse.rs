@@ -1,4 +1,4 @@
-use nalgebra::{Matrix2, Matrix3, Rotation3, Vector2, Vector3};
+use nalgebra::{Matrix2, Matrix3, Quaternion, Rotation3, UnitQuaternion, Vector2, Vector3};
 #[cfg(not(any(feature = "std", test)))]
 use nalgebra::{ComplexField, RealField};
 
@@ -16,6 +16,8 @@ fn rem_euclid(lhs: &f64, rhs: &f64) -> f64 {
 fn rem_euclid(lhs: &f64, rhs: &f64) -> f64 {
     f64::rem_euclid(*lhs, *rhs)
 }
+use core::ops::Neg;
+
 const TOLERANCE_ZERO_YAW: f64 = 1e-6; // Define a small tolerance for near-zero values
 
 use crate::{conversion, Orbita3dKinematicsModel};
@@ -320,6 +322,63 @@ impl Orbita3dKinematicsModel {
 
         thetas
     }
+    pub fn limit_joints_rpy([roll, pitch, yaw]: [f64;3], max_angle: f64) -> [f64; 3] {
+        let rot = Rotation3::from_euler_angles(roll, pitch, yaw);
+        let limited_rot = Self::limit_joints(rot, max_angle);
+        let (roll, pitch, yaw) = limited_rot.euler_angles();
+        [roll, pitch, yaw]
+    }
+    pub fn limit_joints(rot: Rotation3<f64>, max_angle: f64) -> Rotation3<f64> {  const THRESHOLD: f64= 0.99;
+        fn to_extrinsic_zyz_angle(rot: Rotation3<f64>) -> [f64;3] {
+            let rot = rot.into_inner();
+
+            let [e1, e2, e3]: [f64;3];
+            // ZYZ => {
+            if rot.m33.abs() < THRESHOLD {
+                e1 = rot.m32.atan2(-rot.m31);
+                e2 = rot.m33.acos();
+                e3 = rot.m23.atan2(rot.m13);
+            } else {  // Singularity
+                e1 = 0.0;
+                e2 = if rot.m33.is_sign_positive() {0.0} else {core::f64::consts::PI};
+                e3 = (-rot.m12).atan2(rot.m22);
+            }
+
+            [e1, e2, e3]
+            // },
+        }
+        fn to_intrinsic_zyz_angle(rot: Rotation3<f64>) -> [f64;3] {
+            let mut angles = to_extrinsic_zyz_angle(rot);
+            angles.reverse();
+            angles
+        }
+
+        fn from_extrinsic_zyz_angle(angles: [f64;3]) -> Rotation3<f64> {
+            let [alpha, beta, gamma] = [angles[0] * 0.5, angles[1] * 0.5, angles[2] * 0.5];
+            let (sinb, cosb) = beta.sin_cos();
+            let [q0, q1, q2, q3]: [f64;4];
+            let (sin_apg, cos_apg) = (alpha + gamma).sin_cos();
+            let (sin_amg, cos_amg) = (alpha - gamma).sin_cos();
+            // ZYZ => {
+            q0 = cos_apg * cosb;
+            q1 = sin_amg * sinb;
+            q2 = cos_amg * sinb;
+            q3 = sin_apg * cosb;
+            // },
+
+            Rotation3::from(UnitQuaternion::from_quaternion(Quaternion::new(q0, q1, q2, q3)))
+        }
+
+        fn from_intrinsic_zyz_angle(mut angles: [f64;3]) -> Rotation3<f64> {
+            angles.reverse();
+            from_extrinsic_zyz_angle(angles)
+        }
+
+        let [z1, y, z2] = to_intrinsic_zyz_angle(rot);
+        let y = y.clamp(max_angle.neg(), max_angle);
+        let rotation = from_intrinsic_zyz_angle([z1, y, z2]);
+        rotation
+    }
 }
 
 fn compute_gammas(thetas: Vector3<f64>) -> Vector3<f64> {
@@ -421,5 +480,17 @@ mod tests {
         assert!(valid_thetas[0].abs() < 1e-4);
         assert!(valid_thetas[1].abs() < 1e-4);
         assert!(valid_thetas[2].abs() < 1e-4);
+    }
+
+    #[test]
+    fn limit_joints() {
+
+        let rot = intrinsic_roll_pitch_yaw_to_matrix(60.0_f64.to_radians(), 0.0, 0.0);
+
+        let rot = Orbita3dKinematicsModel::limit_joints(rot, 45.0_f64.to_radians());
+        let (roll, pitch, yaw)  = rot.euler_angles();
+        assert!(roll - std::f64::consts::FRAC_PI_4 < 1e-4);
+        assert!(pitch < 1e-4);
+        assert!(yaw < 1e-4);
     }
 }

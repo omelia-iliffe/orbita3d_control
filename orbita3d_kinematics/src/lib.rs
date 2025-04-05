@@ -73,4 +73,23 @@ impl Orbita3dKinematicsModel {
 
         rot * v_rotation
     }
+
+    pub fn calculate_max_angle(&self) -> f64 {
+        let angle = 60.0_f64.to_radians() - (self.gamma_min/2.0);
+        let [_, pitch, _] = self.compute_forward_kinematics_rpy_multiturn([0.0, angle, -angle]).unwrap();
+        pitch
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn calculate_max_angle() {
+        let mut model = Orbita3dKinematicsModel::default();
+        model.gamma_min = 60.0_f64.to_radians();
+        let max = model.calculate_max_angle();
+        assert!(max - 0.61453 < 1e-4);
+    }
 }
