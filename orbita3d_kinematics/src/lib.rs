@@ -8,7 +8,7 @@
 //!
 //! See the [README.md](./README.md) for more information.
 
-#![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(any(feature = "std", test)), no_std)]
 
 use nalgebra::{Matrix3, Rotation3, Vector3};
 #[cfg(not(feature = "std"))]
