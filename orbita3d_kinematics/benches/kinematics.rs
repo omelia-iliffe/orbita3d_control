@@ -13,5 +13,16 @@ pub fn inverse_kinematics(c: &mut Criterion) {
         })
     });
 }
-criterion_group!(benches, inverse_kinematics);
+
+pub fn forward_kinematics(c: &mut Criterion) {
+    let orb = Orbita3dKinematicsModel::default();
+
+    c.bench_function("forward_kinematics", |b| {
+        b.iter(|| {
+            let thetas = orb.compute_forward_kinematics(black_box([0.0; 3])).unwrap();
+        })
+    });
+}
+
+criterion_group!(benches, inverse_kinematics, forward_kinematics);
 criterion_main!(benches);
