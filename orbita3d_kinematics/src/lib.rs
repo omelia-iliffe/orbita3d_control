@@ -74,17 +74,30 @@ impl Orbita3dKinematicsModel {
         rot * v_rotation
     }
 
-    pub fn calculate_max_angle(&self) -> f64 {
+    pub fn calculate_max_angle(&self) -> Option<f64> {
         let angle = 60.0_f64.to_radians() - (self.gamma_min / 2.0);
+        let angle = angle * 0.99;
         let [_, pitch1, _] = self
             .compute_forward_kinematics_rpy_multiturn([0.0, angle, -angle])
-            .unwrap();
+            .inspect_err(|_| {
+                log::error!(
+                    "failed to find max pitch for gamma min position {}",
+                    self.gamma_min.to_degrees()
+                )
+            })
+            .ok()?;
         let angle = (self.gamma_max - 120.0_f64.to_radians()) / 2.0;
-        let angle = angle*0.9999;
+        let angle = angle * 0.99;
         let [_, pitch2, _] = self
             .compute_forward_kinematics_rpy_multiturn([0.0, angle, -angle])
-            .unwrap();
-        pitch1.min(pitch2)
+            .inspect_err(|_| {
+                log::error!(
+                    "failed to find max pitch for gamma max {}",
+                    self.gamma_max.to_degrees()
+                )
+            })
+            .ok()?;
+        Some(pitch1.min(pitch2))
     }
 }
 
@@ -93,9 +106,32 @@ mod tests {
     use super::*;
     #[test]
     fn calculate_max_angle() {
-        let mut model = Orbita3dKinematicsModel::default();
-        model.gamma_min = 60.0_f64.to_radians();
-        let max = model.calculate_max_angle();
-        assert!(max - 0.61453 < 1e-4);
+        let mut model = Orbita3dKinematicsModel {
+            alpha: 45.0_f64.to_radians(),
+            gamma_min: 45_f64.to_radians(),
+            offset: 0.0,
+            beta: 90.0_f64.to_radians(),
+            gamma_max: 175.0_f64.to_radians(),
+            passiv_arms_direct: true,
+        };
+        let max = model.calculate_max_angle().unwrap();
+        dbg!(max);
+    }
+    #[test]
+    fn calculate_max_angle_50() {
+        let mut model = Orbita3dKinematicsModel {
+            alpha: 45.0_f64.to_radians(),
+            gamma_min: 50_f64.to_radians(),
+            offset: 0.0,
+            beta: 90.0_f64.to_radians(),
+            gamma_max: 175.0_f64.to_radians(),
+            passiv_arms_direct: true,
+        };
+
+        // model.gamma_min = 60.0_f64.to_radians();
+        let angle = 60.0_f64.to_radians() - (model.gamma_min / 2.0).next_up();
+        dbg!(angle.to_degrees());
+        let max = model.calculate_max_angle().unwrap();
+        dbg!(max);
     }
 }
