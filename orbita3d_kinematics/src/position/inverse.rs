@@ -328,7 +328,7 @@ impl Orbita3dKinematicsModel {
         let (roll, pitch, yaw) = limited_rot.euler_angles();
         [roll, pitch, yaw]
     }
-    pub fn limit_joints(rot: Rotation3<f64>, max_angle: f64) -> Rotation3<f64> {  const THRESHOLD: f64= 0.99;
+    pub fn limit_joints(rot: Rotation3<f64>, max_angle: f64) -> Rotation3<f64> {  const THRESHOLD: f64= 0.999999999999;
         fn to_extrinsic_zyz_angle(rot: Rotation3<f64>) -> [f64;3] {
             let rot = rot.into_inner();
 
